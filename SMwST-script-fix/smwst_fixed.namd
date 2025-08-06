@@ -1,0 +1,390 @@
+##################################################################
+# String Method with Swarms of Trajectories (SMwST)
+# Mahmoud Moradi, University of Arkansas (moradi@uark.edu)
+##################################################################
+
+if {![info exists harm]} {
+    error "harmonic block (harm) is not set!"
+}
+
+if {![info exists force]} {
+    error "harmonic force constant (force) is not set!"
+}
+
+if {![info exists initial_reparam]} {
+    set initial_reparam 0
+}
+
+set replica_id [myReplica]
+
+if {![info exists nc]} {
+    set nc 1
+}
+
+if {![info exists ns]} {
+    set ns 1
+}
+
+set image_id [expr $replica_id/$nc]
+set copy_id [expr $replica_id%$nc]
+
+if {![info exists cvs]} {
+    error "cvs is not set!"
+}
+
+if {![info exists cvsd]} {
+    set cvsd 1
+}
+
+if {[llength $cvsd]==1&&[llength $cvs]>1} {
+    set cvd $cvsd
+    for {set i 1} {$i<[llength $cvs]} {incr i} {
+    lappend cvsd $cvd
+    }
+}
+
+if {![info exists cvsm]} {
+    set cvsm 1
+}
+
+if {[llength $cvsm]==1&&[llength $cvs]>1} {
+    set cvm $cvsm
+    for {set i 1} {$i<[llength $cvs]} {incr i} {
+    lappend cvsm $cvm
+    }
+}
+
+###################################
+# input/output setting
+if {[info exists system_conf]} {
+    source $system_conf
+}
+if {[info exists colvars_conf]} {
+    colvars on
+    colvarsConfig $colvars_conf
+}
+
+if {![info exists output_root]} {
+    error "output_root is not set!"
+}
+
+if {![info exists job_id]} {
+    set job_id 0
+}
+
+set output_name [format $output_root $image_id]
+outputname $output_name.job$job_id.$replica_id
+
+if { $job_id > 0 } { #restart
+    set old_job_id [expr $job_id-1]
+    set input_name $output_name.job$old_job_id.$replica_id.restart
+} else {
+    if {[info exists input_root]} {
+    set input_name [format $input_root $image_id]
+    } else {
+    error "input_root is not set!"
+    }
+}
+
+bincoordinates $input_name.coor
+
+if {![info exists usevel]} {
+    set usevel 0
+}
+
+if {([info exists input_root]&&$usevel)||[info exists old_job_id]} { #do you have *.vel files?
+    binvelocities $input_name.vel
+} else {
+    if {[info exists temperature]} {
+    temperature $temperature
+    } else {
+    error "temperature is not set!"
+    }
+}
+
+if {![info exists usexsc]} {
+    set usexsc 0
+}
+
+if {([info exists input_root]&&$usexsc)||[info exists old_job_id]} { #do you have *.xsc files?
+    extendedSystem $input_name.xsc
+    set myxscfile $input_name.xsc
+} else {
+    if {[info exists cellinfo]} {
+    cellBasisVector1    [lindex $cellinfo 0]
+    cellBasisVector2    [lindex $cellinfo 1]
+    cellBasisVector3    [lindex $cellinfo 2]
+    cellOrigin          [lindex $cellinfo 3]
+    } else {
+    error "cellinfo is not set!"
+    }
+}
+
+proc get_firsttime { xscfile } {
+    set fd [open $xscfile r]
+    gets $fd
+    gets $fd
+    gets $fd line
+    set ts [lindex $line 0]
+    close $fd
+    return $ts
+}
+
+if {[info exists old_job_id]} {
+    set firsttime [get_firsttime $myxscfile]
+} else {
+    set firsttime 0
+
+}
+if {![info exists runE]} {
+    set runE 500
+}
+if {![info exists runR]} {
+    set runR 500
+}
+
+set runs_done [expr int($firsttime/($runE+$runR))]
+firsttimestep $firsttime
+
+###############################################
+# Some handy variables
+
+# number of replicas
+set nr [numReplicas]
+# number of images
+set ni [expr $nr/$nc]
+
+set ncs [expr 1.0/($nc*$ns)]
+set nii [expr 1.0/$ni]
+
+if {![info exists smooth]} {
+    set smooth 0
+}
+
+set oneminussmooth [expr 1-$smooth]
+set halfsmooth [expr $smooth/2.0]
+set ni1 [expr $ni-1]
+
+###############################################
+# Procedures
+
+proc replica_centers { mycolvars } {
+    global harm
+    global cvsd
+    set mycolvars_d 0
+    set cnt "centers \{ "
+    foreach cvd $cvsd {
+    if { $cvd == 4 } {
+        append cnt " ( " [lindex $mycolvars $mycolvars_d] " , " [lindex $mycolvars [expr $mycolvars_d+1]] " , " [lindex $mycolvars [expr $mycolvars_d+2]] " , " [lindex $mycolvars [expr $mycolvars_d+3]] " ) "
+    } elseif { $cvd == 3 } {
+        append cnt " ( " [lindex $mycolvars $mycolvars_d] " , " [lindex $mycolvars [expr $mycolvars_d+1]] " , " [lindex $mycolvars [expr $mycolvars_d+2]] " ) "
+    } elseif { $cvd == 2 } {
+        append cnt " ( " [lindex $mycolvars $mycolvars_d] " , " [lindex $mycolvars [expr $mycolvars_d+1]] " ) "
+    } elseif { $cvd == 1 } {
+        append cnt " " [lindex $mycolvars $mycolvars_d] " "
+    } else {
+        append cnt [expr "$r2d*atan2([lindex $mycolvars $mycolvars_d],[lindex $mycolvars $mycolvars_d+1])"]
+        set mycolvars_d [expr $mycolvars_d+1]
+    }
+    set mycolvars_d [expr $mycolvars_d+$cvd]
+    }
+    append cnt " \}"
+    return [list $harm "$cnt"]
+}
+
+proc colvars_length { mycolvars } {
+    global cvsm
+    global cvsd
+    set my_d 0
+    set my_length 0.0
+    for { set cv 0 } { $cv < [llength cvsd] } { incr cv } {
+        for { set cvd 0 } { $cvd < [lindex $cvsd $cv] } { incr cvd } {
+            set my_length [expr "$my_length+[lindex $cvsm $cv]*([lindex $mycolvars $my_d])**2"]
+            incr my_d 1
+        }
+    }
+    return [expr "sqrt($my_length)"]
+}
+
+proc normalize_colvars { mycolvars } {
+    global cvsd
+    set mycolvars_d 0
+    foreach cvd $cvsd {
+    if { $cvd == 4 } {
+        set q [list [lindex $mycolvars $mycolvars_d] [lindex $mycolvars [expr $mycolvars_d+1]] [lindex $mycolvars [expr $mycolvars_d+2]] [lindex $mycolvars [expr $mycolvars_d+3]]]
+        set norm [veclength $q]
+        for { set dd $mycolvars_d } { $dd < [expr $mycolvars_d+4] } { incr dd } {
+        lset mycolvars $dd [expr [lindex $mycolvars $dd]/$norm]
+        }
+    }
+    set mycolvars_d [expr $mycolvars_d+$cvd]
+    }
+    return $mycolvars
+}
+
+###############################################
+# Main Body
+
+if {![info exists runs]} {
+    error "number of runs (runs) is not set!"
+}
+
+set runs [expr $runs-$runs_done]
+
+if {$runs < 1} {
+    error "requested number of iterations must be positive!"
+}
+
+for { set r 0 } { $r < $runs } { incr r } {
+
+# Sample (from 0 to ns-1)
+    set samp [expr $r%$ns]
+
+# Drift
+    if { $r == 0 } {
+        run 0
+    }
+    set values ""
+    foreach cv $cvs {
+        set value [colvarvalue $cv]
+        append values [regexp -all -inline {\S+} $value] " "
+    }
+    set values [string trimright $values]
+
+    replicaBarrier
+
+    if { $r == 0 } {
+        if { $replica_id > 0 } {
+            replicaSend $values 0
+        } else {
+            set colvars(0) [split $values]
+            for { set R 1 } { $R < $nr } { incr R } {
+                set I [expr $R/$nc]
+                set J [expr $R%$nc]
+                if { $J == 0 } {
+                    set colvars($I) [split [replicaRecv $R]]
+                } else {
+                    set colvars($I) [vecadd $colvars($I) [split [replicaRecv $R]]]
+                }
+            }
+        }	
+    }
+
+    if { $samp == 0 && $replica_id == 0 } {
+        for { set I 0 } { $I < $ni } { incr I } {
+            if { $r == 0 } {
+                set colvars($I) [vecscale $colvars($I) [expr 1.0/$nc]]
+            } else {
+                set colvars($I) [vecscale $colvars($I) $ncs]
+            }
+             set colvars($I) [normalize_colvars $colvars($I)]
+            print "Drifted Centers" $I $colvars($I)
+        }
+    }
+
+# Smoothing
+    if { $replica_id == 0 && $samp==0 } {
+        if { ( $smooth > 0 ) && ( $r > 0 || $initial_reparam ) && ($ni > 1) } {
+            set colvarsS(0) $colvars(0)
+            print "Smoothed Centers" 0 $colvarsS(0)
+            for { set I 1 } { $I < $ni1 } { incr I } {
+                set Im [expr $I-1]
+                set Ip [expr $I+1]
+                set colvarsS($I) [vecadd [vecscale $colvars($I) $oneminussmooth] [vecscale [vecadd $colvars($Im) $colvars($Ip)] $halfsmooth]]
+                set colvarsS($I) [normalize_colvars $colvarsS($I)]
+                print "Smoothed Centers" $I $colvarsS($I)
+            }
+            set colvarsS($ni1) $colvars($ni1)
+            print "Smoothed Centers" $ni1 $colvarsS($ni1)
+        } else {
+            array set colvarsS [array get colvars]
+        }
+    }
+
+# Reparametrize
+    
+    if { $replica_id == 0 && $samp==0 } {
+    if { ($r > 0 || $initial_reparam) && ($ni > 1) } {
+        set colvarsR(0) $colvarsS(0)
+        print "Reparametrized Centers" 0 $colvarsS(0)
+        set totlen(0) 0.0
+        for { set I 1 } { $I < $ni } { incr I } {
+        set J [expr $I-1]
+        set dx($I) [vecsub $colvarsS($I) $colvarsS($J)]
+        set ds($I) [colvars_length $dx($I)]
+        set dx($I) [vecscale $dx($I) [expr 1.0/$ds($I)]]
+        set totlen($I) [expr $totlen($J)+$ds($I)]
+        }
+        set dS [expr $totlen($ni1)/$ni1]
+        set I 0
+        set J 0
+        while { $I < [expr $ni1-1] } {
+        incr I 1
+        set sm [expr $I*$dS]
+        while { $J < $ni && $sm > $totlen($J) } {
+            incr J 1
+        }
+        set J1 [expr $J-1]
+        set colvarsR($I) [vecadd $colvarsS($J1) [vecscale $dx($J) [expr $sm-$totlen($J1)]]]
+        set colvarsR($I) [normalize_colvars $colvarsR($I)]
+        print "Reparametrized Centers" $I $colvarsR($I)
+        }
+        set colvarsR($ni1) $colvarsS($ni1)
+        print "Reparametrized Centers" $ni1 $colvarsR($ni1)
+    } else {
+        array set colvarsR [array get colvarsS]
+    }
+    }
+
+# Update the centers
+
+    if { $samp==0 } {
+        replicaBarrier
+
+        if { $replica_id > 0 } {
+            set colvarsR($image_id) [split [replicaRecv 0]]
+        } else {
+            for { set R 1 } { $R < $nr } { incr R } {
+                set I [expr $R/$nc]
+                set values ""
+                foreach value $colvarsR($I) {
+                    append values $value " "
+                }
+                set values [string trimright $values]
+                replicaSend $values $R
+            }
+        }
+        set centers($image_id) [replica_centers $colvarsR($image_id)]
+    }
+
+# Set the colvars
+    if { $replica_id > 0 } {
+        replicaSend $values 0
+    } else {
+        if { $samp == 0 } {
+            set colvars(0) [split $values]
+        } else {
+            set colvars(0) [vecadd $colvars(0) [split $values]]
+        }
+        for { set R 1 } { $R < $nr } { incr R } {
+            set I [expr $R/$nc]
+            set J [expr $R%$nc]
+            if { $J == 0 && $samp == 0 } {
+                set colvars($I) [split [replicaRecv $R]]
+            } else {
+                set colvars($I) [vecadd $colvars($I) [split [replicaRecv $R]]]
+            }
+        }
+    }
+
+# Equilibration
+
+    eval colvarbias [concat changeconfig $centers($image_id)]
+    eval colvarbias [concat changeconfig [list $harm "forceConstant $force"]]
+    run $runE
+
+# Release
+    eval colvarbias [concat changeconfig [list $harm "forceConstant 0"]]
+    run $runR
+
+}
