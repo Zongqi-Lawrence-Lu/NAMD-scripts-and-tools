@@ -1,4 +1,4 @@
-NAMD Simulation Scripts and Tools
+# NAMD Simulation Scripts and Tools
 
 This folder contains a curated collection of Python, Tcl, and Bash scripts I developed while working on molecular dynamics (MD) simulations using NAMD for protein systems. These tools are used in:
 
@@ -14,14 +14,16 @@ As of July 2025, my project studies are exploring the conformational transition 
 
 # Repository Structure
 
-        Folder         |                   Description
- pmf-calculation-WHAM  | Create the input files to calculate PMF with WHAM
- pmf-calculation-BRwGS | Create the input files to calculate PMF with BRwGS
- monitor-SMD-progress  | Script to monitor the colvar status (angle, dihed, distance) in a reaction
- extract-SMwST-input   | Extract the input at desired nanoseconds as inputs to SMwST
- monitor-SMwST-progress| Calculates string RMSD and plots several graphs to monitor SmwST convergence
- extract-BEUS-input    | Extract the desired number of images and copies (can add images) from SMwST to start BEUS
- SMwST-script-fix      | A patched version of Moradi's SMwST NAMD script that supports ns > 1 (number of samples per iteration)
+| Folder                   | Description                                                                 |
+|--------------------------|-----------------------------------------------------------------------------|
+| pmf-calculation-WHAM     | Create the input files to calculate PMF with WHAM                           |
+| pmf-calculation-BRwGS    | Create the input files to calculate PMF with BRwGS                          |
+| monitor-SMD-progress     | Script to monitor the colvar status (angle, dihed, distance) in a reaction |
+| extract-SMwST-input      | Extract the input at desired nanoseconds as inputs to SMwST                |
+| monitor-SMwST-progress   | Calculates string RMSD and plots several graphs to monitor SmwST convergence|
+| extract-BEUS-input       | Extract the desired number of images and copies (can add images) from SMwST to start BEUS |
+| SMwST-script-fix         | A patched version of Moradi's SMwST NAMD script that supports ns > 1 (number of samples per iteration) |
+
 
 
 # Highlighted Features
