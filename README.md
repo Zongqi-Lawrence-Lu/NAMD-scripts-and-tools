@@ -5,11 +5,10 @@ This folder contains a curated collection of Python, Tcl, and Bash scripts I dev
 - Free energy calculation by generating inputs to two different methods (WHAM and BEUS)
 - Automatically extracts/generates the input file to SMD, SMwST, and BEUS
 - Output monitoring and analysis, with focus on angles and quaternions colvars
-- Fixing and extending existing methods (SMwST)
 
 These scripts were developed as part of my research under the mentorship of Prof. Esmael Haddadian at UChicago, where we use high-performance computing (HPC) clusters to run enhanced sampling simulations. 
 
-As of July 2025, my project studies are exploring the conformational transition between open and closed states of insulin-degrading enzyme in the presence of insulin and Amyloid-β using molecular dynamics simulation. Feel free to contact me if you are interested in my project or have questions about any of the scripts.
+As of November 2025, my project studies are exploring the conformational transition between open and closed states of insulin-degrading enzyme in the presence of insulin and Amyloid-β using molecular dynamics simulation. Feel free to contact me if you are interested in my project or have questions about any of the scripts.
 
 
 # Repository Structure
@@ -22,9 +21,6 @@ As of July 2025, my project studies are exploring the conformational transition 
 | extract-SMwST-input      | Extract the input at desired nanoseconds as inputs to SMwST                |
 | monitor-SMwST-progress   | Calculates string RMSD and plots several graphs to monitor SmwST convergence|
 | extract-BEUS-input       | Extract the desired number of images and copies (can add images) from SMwST to start BEUS |
-| SMwST-script-fix         | A patched version of Moradi's SMwST NAMD script that supports ns > 1 (number of samples per iteration) |
-
-
 
 # Highlighted Features
 
@@ -38,11 +34,6 @@ As of July 2025, my project studies are exploring the conformational transition 
   - Analyze colvar time series to monitor reaction process, SMwST convergence that VMD does not support on its own
   - Faster and more robust string RMSD calculation with Python
   - More options for extracting inputs: SMwST inputs can be extracted by providing a list of times; can customize the number of images as the starting point for BEUS
-
-3. SMwST Compatibility Fix:
-  - Make several changes to smwst.namd to handle multiple samples per iteration (ns > 1)
-  - Makes SMwST compatible with the multi-replica adaptive string method
-
 
 # Requirements
 
